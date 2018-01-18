@@ -12,39 +12,40 @@ networks:
     driver_opts:
       encrypted: ""
 
-configs:
-  proxy:
-    file: ./proxy.conf
-
 services:
   proxy:
-    image: jwilder/nginx-proxy
+    image: 'nginx:1'
     networks:
       - elasticsearch-frontend
       - elasticsearch-backend
     ports:
-      - "80:80"
-    configs:
-      - source: proxy
-        target: /etc/nginx/proxy.conf
-        mode: 0440
-    volumes:
-      - /var/run/docker.sock:/tmp/docker.sock:ro
+        - '80:9200'
     deploy:
       mode: global
-
-  whoami:
-    image: jwilder/whoami
-    environment:
-      - VIRTUAL_HOST=whoami.local
-
+    command: |
+      /bin/bash -c "echo '
+      server {
+        listen 9200;
+        add_header X-Frame-Options "SAMEORIGIN";
+        location / {
+            proxy_pass http://elastic:9200;
+            proxy_http_version 1.1;
+            proxy_set_header Connection keep-alive;
+            proxy_set_header Upgrade $$http_upgrade;
+            proxy_set_header Host $$host;
+            proxy_set_header X-Real-IP $$remote_addr;
+            proxy_cache_bypass $$http_upgrade;
+            client_max_body_size 200m;
+        }
+      }' | tee /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+  
   elastic:
     image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.1.2
     command: [ elasticsearch, 
       -E, network.host=0.0.0.0, 
       -E, discovery.zen.ping.unicast.hosts=elastic, 
-      -E, gateway.recover_after_nodes=2,
-      -E, discovery.zen.minimum_master_nodes=2 ]  
+      -E, gateway.recover_after_nodes=1,
+      -E, discovery.zen.minimum_master_nodes=1 ]  
     environment:
       - VIRTUAL_HOST=elastic
       - VIRTUAL_PORT=9200
