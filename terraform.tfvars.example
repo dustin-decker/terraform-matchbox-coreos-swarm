@@ -1,0 +1,9 @@
+matchbox_http_endpoint = "https://838hfuei.ngrok.io"
+matchbox_rpc_endpoint = "192.168.1.2:8081"
+ssh_authorized_key = "ssh-rsa .."
+cluster_name = "cluster1"
+container_linux_version = "1576.5.0"
+container_linux_channel = "stable"
+
+cached_install = "true"
+# container_linux_oem = ""

@@ -1,0 +1,57 @@
+version: "3.3"
+
+networks:
+  elasticsearch-frontend:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: ""
+  elasticsearch-backend:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: ""
+
+configs:
+  proxy:
+    file: ./proxy.conf
+
+services:
+  proxy:
+    image: jwilder/nginx-proxy
+    networks:
+      - elasticsearch-frontend
+      - elasticsearch-backend
+    ports:
+      - "80:80"
+    configs:
+      - source: proxy
+        target: /etc/nginx/proxy.conf
+        mode: 0440
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    deploy:
+      mode: global
+
+  whoami:
+    image: jwilder/whoami
+    environment:
+      - VIRTUAL_HOST=whoami.local
+
+  elastic:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.1.2
+    command: [ elasticsearch, 
+      -E, network.host=0.0.0.0, 
+      -E, discovery.zen.ping.unicast.hosts=elastic, 
+      -E, gateway.recover_after_nodes=2,
+      -E, discovery.zen.minimum_master_nodes=2 ]  
+    environment:
+      - VIRTUAL_HOST=elastic
+      - VIRTUAL_PORT=9200
+    networks:
+      - elasticsearch-backend
+    deploy:
+      mode: global
+      endpoint_mode: dnsrr
+    volumes:
+      - "/tmp:/data"

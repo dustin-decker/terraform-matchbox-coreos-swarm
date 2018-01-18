@@ -1,0 +1,8 @@
+terraform.tfvars
+terraform.tfstate
+terraform.tfstate.backup
+cl/core-node.tmpl.yaml
+coreos
+scripts/fetch-swarm-tokens.sh
+cl/coreos-install.tmpl.yaml
+.terraform

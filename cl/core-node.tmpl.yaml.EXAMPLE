@@ -1,0 +1,121 @@
+---
+# this config is run after installed to disk
+# this is the running server config
+
+systemd:
+  units:
+    - name: initializer.service
+      enable: true
+      contents: |
+        [Unit]
+        Requires=docker.target
+        After=docker.target
+        [Service]
+        Type=oneshot
+        ExecStart=/opt/initializer
+        [Install]
+        WantedBy=multi-user.target
+    - name: prune.service
+      enable: true
+      contents: |
+        [Unit]
+        Description=Cleans up docker resources
+        [Service]
+        Type=oneshot
+        ExecStart=docker system prune -af
+    - name: prune.timer
+      enable: true
+      contents: |
+        [Unit]
+        Description=Run docker prune daily
+        [Timer]
+        OnCalendar=daily
+        Persistent=true  
+        [Install]
+        WantedBy=multi-user.target
+
+storage:
+  files:
+    - path: /opt/initializer
+      filesystem: root
+      mode: 0500
+      contents:
+        inline: |
+          #!/bin/bash -ex
+          # use subnets that don't conflict with your stuff.
+          # docker_gwbridge connects overlay to host physical network
+          #docker network create --subnet=172.31.0.0/16 --gateway 172.31.0.1 -o com.docker.network.bridge.enable_icc=false -o com.docker.network.bridge.name=docker_gwbridge -o com.docker.network.bridge.enable_ip_masquerade=true docker_gwbridge
+          # UTC by defaut. customize timezone:
+          timedatectl set-timezone America/Rainy_River
+          # set the hostname
+          /usr/bin/hostnamectl set-hostname core-$(date +%s)
+          # make sure the new networking stuff settles
+          systemctl restart docker
+          # prevent from running again
+          systemctl disable initializer
+          docker swarm join --token SWMTKN-1-NOPE-SEKRIT 45.76.66.66:2377
+          sysctl -w vm.max_map_count=262144 
+          # tell me it's done
+          curl --retry 10 --max-time 5 -s "https://838hfuei.ngrok.io/yo-im-done-butthead"
+          exit 0
+
+    - path: /etc/resolv.conf
+      filesystem: root
+      mode: 0644
+      contents:
+        inline: |
+          # default, from bridge
+          nameserver 172.30.254.1
+          # use your own DNS
+          nameserver 8.8.8.8
+          nameserver 8.8.4.4
+
+    - path: /etc/systemd/timesyncd.conf
+      filesystem: root
+      mode: 0644
+      contents:
+        inline: |
+          [Time]
+          # use your own dang ntp servers.
+          # very important to have well-synced times with clustered systems.
+          NTP=0.coreos.pool.ntp.org 1.coreos.pool.ntp.org
+
+
+    - path: /etc/sysctl.conf
+      filesystem: root
+      mode: 0644
+      contents:
+        inline: |
+          net.netfilter.nf_conntrack_max=131072
+          vm.max_map_count=262144
+          
+    # custom log label gets added to the json container logs.
+    # label gives us the service name associated with the container
+    # max-size and max-file take care of container log rotation
+    # overlay2 storage is default, and recomemmended in for new kernels
+    # use a BIP that is not conflicting with your existing network.
+    - path: /etc/docker/daemon.json
+      filesystem: root
+      mode: 0644
+      contents:
+        inline: |
+          {
+            "debug":false,
+            "bip":"172.30.254.1/24",
+            "storage-driver":"overlay2",
+            "log-driver":"json-file",
+            "log-opts":{
+                "labels":"com.docker.swarm.service.name",
+                "max-size":"2m",
+                "max-file":"2"
+            }
+          }
+
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys:
+        - {{.ssh_authorized_key}}
+
+locksmith:
+  reboot_strategy: "off"
