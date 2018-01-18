@@ -1,0 +1,26 @@
+version: "3.3"
+
+networks:
+  iperf:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: ""
+
+services:
+  iperf-a:
+    image: nicolaka/netshoot
+    command: iperf -s -p 9999
+    networks:
+      - iperf
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    deploy:
+      mode: global
+  iperf-b:
+    image: nicolaka/netshoot
+    command: iperf -c iperf-a -p 9999
+    networks:
+      - iperf
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    deploy:
+      mode: global
